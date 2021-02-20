@@ -116,10 +116,15 @@ march_option_prices = march_option_prices.drop(["Time Delta", "Expiry Date"], ax
 
 # Plot the time to expiry data
 data = march_option_prices[['t']]
-fig, axs = plt.subplots(1, 1, figsize=(20, 10))
-data.hist(ax=axs, weights=np.zeros_like(data) + 1. / data.size)
-axs.set_title("Time to Expiry Histogram")
-axs.set_xlabel('Time to Expiry')
+fig, axs = plt.subplots(2, 1, figsize=(20, 10))
+data.hist(ax=axs[0], weights=np.zeros_like(data) + 1. / data.size)
+axs[0].set_title("Time to Expiry Histogram")
+axs[0].set_xlabel('Time to Expiry')
+
+x = np.linspace(0, 1)
+axs[1].plot(x, ss.lognorm.pdf(x, 1.5, 0.05, 0.15))
+axs[1].set_title("Log normal 1.5, 0.05, 0.15 distribution")
+
 plt.show()
 
 # Split the options into calls and puts
