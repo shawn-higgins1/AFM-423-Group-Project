@@ -28,7 +28,6 @@ march_option_prices["Expiry Date"] = pd.to_datetime(march_option_prices["Expiry 
 # Load in the historical prices for the S&P TSX 60
 sp_60_prices = pd.read_excel(DATA_DIR + '/PerformanceGraphExport.xls')
 
-
 # Plot the index price data
 plt.plot(
     sp_60_prices[['Effective date']],
@@ -61,6 +60,8 @@ plt.ylabel('Volatility')
 plt.xlabel('Date')
 plt.show()
 
+sp_60_prices = sp_60_prices.rename(columns={"Volatility": "sigma"})
+
 # Join the option prices and the index prices
 march_option_prices = pd.merge(march_option_prices, sp_60_prices, left_on='Date', right_on='Effective date')
 
@@ -73,13 +74,13 @@ march_option_prices = march_option_prices.drop(
 # Source: https://ycharts.com/companies/XIU.TO/dividend_yield
 # Load in the data for the annual dividend yield for the S&P TSX 60
 dividend_yield = pd.read_excel(DATA_DIR + '/Dividend Yield.xlsx')
-dividend_yield = dividend_yield.rename(columns={'Value': 'Dividend Yield'})
+dividend_yield = dividend_yield.rename(columns={'Value': 'D'})
 dividend_yield = dividend_yield.sort_values(by='Date')
 
 # Plot the dividend data
 plt.plot(
     dividend_yield[['Date']],
-    dividend_yield[['Dividend Yield']]
+    dividend_yield[['D']]
 )
 plt.title("S&P/TSX 60 Dividend Yield")
 plt.xlabel("Month (2020)")
@@ -94,11 +95,12 @@ march_option_prices = pd.merge(march_option_prices, dividend_yield, on='Date', h
 # Load in the continuously compounded risk free interest rate
 interest_rates = pd.read_csv(DATA_DIR + '/1-month-treasury-rates.csv')
 interest_rates["Date"] = pd.to_datetime(interest_rates["Date"])
+interest_rates = interest_rates.rename(columns={'Interest Rate': 'r'})
 
 # Plot the risk free interest rate data
 plt.plot(
     interest_rates[['Date']],
-    interest_rates[['Interest Rate']]
+    interest_rates[['r']]
 )
 plt.title("1 Month Treasury Rates")
 plt.xlabel("Month (2020)")
@@ -130,36 +132,41 @@ plt.show()
 # Split the options into calls and puts
 call_options = march_option_prices[march_option_prices["Call/Put"] == 0]
 call_options = call_options.drop(["Call/Put"], axis=1)
-call_options['Black Scholes'] = 0.0
+call_options['C'] = 0.0
+call_options['S/K'] = call_options['Index Price'] / call_options['Strike Price']
 
 # Calculate the black scholes price for the calls
 for i, call_option in call_options.iterrows():
-    call_options.at[i, 'Black Scholes'] = black_scholes_calls(
+    call_options.at[i, 'C'] = black_scholes_calls(
         call_option['Index Price'],
-        call_option['Dividend Yield'],
+        call_option['D'],
         call_option['t'],
         call_option['Strike Price'],
-        call_option['Interest Rate'],
-        call_option['Volatility']
+        call_option['r'],
+        call_option['sigma']
     )
+
+call_options['C/K'] = call_options['C'] / call_options['Strike Price']
 
 # Save the data in a csv
 call_options.to_csv(DATA_DIR + '/calls.csv')
 
 put_options = march_option_prices[march_option_prices["Call/Put"] == 1]
 put_options = put_options.drop(["Call/Put"], axis=1)
-put_options['Black Scholes'] = 0.0
+put_options['C'] = 0.0
+put_options['S/K'] = put_options['Index Price'] / put_options['Strike Price']
 
 # Calculate the black scholes price for the puts
 for i, put_option in put_options.iterrows():
-    put_options.at[i, 'Black Scholes'] = black_scholes_puts(
+    put_options.at[i, 'C'] = black_scholes_puts(
         put_option['Index Price'],
-        put_option['Dividend Yield'],
+        put_option['D'],
         put_option['t'],
         put_option['Strike Price'],
-        put_option['Interest Rate'],
-        put_option['Volatility']
+        put_option['r'],
+        put_option['sigma']
     )
+put_options['C/K'] = put_options['C'] / put_options['Strike Price']
 
 # Save the data in a csv
 put_options.to_csv(DATA_DIR + '/puts.csv')
