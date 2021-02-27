@@ -14,9 +14,7 @@ march_option_prices = pd.read_csv(DATA_DIR + '/quote_SXO_20200101_20200430.csv',
     'Strike Price',
     'Expiry Date',
     'Call/Put',
-    'Settlement Price',
     'Volume',
-    'Implied Volatility'
 ]]
 
 # Cleanup the options data removing options that had no volume traded during the day
