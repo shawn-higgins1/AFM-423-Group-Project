@@ -4,7 +4,7 @@ import scipy.stats as ss
 
 
 def generate_options_data(n, call_data):
-    output = np.empty((n + 1, 7), dtype=object)
+    output = np.empty((n + 1, 9), dtype=object)
     output[0] = np.array(
         [
             'K',
@@ -14,6 +14,8 @@ def generate_options_data(n, call_data):
             'volatility',
             'd',
             'Expected Price',
+            'C/K',
+            'S/K'
         ]
     )
 
@@ -52,7 +54,9 @@ def generate_options_data(n, call_data):
             r,
             volatility,
             d,
-            expected_price
+            expected_price,
+            expected_price / strike_price,
+            index_price / strike_price
         ])
 
     return output
@@ -63,14 +67,14 @@ DATA_DIR = "../data"
 
 np.random.seed(123)
 
-train_data = generate_options_data(50000, True)
-test_data = generate_options_data(5000, True)
+train_data = generate_options_data(10000, True)
+test_data = generate_options_data(1000, True)
 
 np.savetxt(DATA_DIR + "/train_calls.csv", train_data, delimiter=",", fmt='%s')
 np.savetxt(DATA_DIR + "/test_calls.csv", test_data, delimiter=",", fmt='%s')
 
-train_data = generate_options_data(50000, False)
-test_data = generate_options_data(5000, False)
+train_data = generate_options_data(10000, False)
+test_data = generate_options_data(1000, False)
 
 np.savetxt(DATA_DIR + "/train_puts.csv", train_data, delimiter=",", fmt='%s')
 np.savetxt(DATA_DIR + "/test_puts.csv", test_data, delimiter=",", fmt='%s')
