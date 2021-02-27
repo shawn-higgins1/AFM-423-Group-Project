@@ -7,15 +7,15 @@ def generate_options_data(n, call_data):
     output = np.empty((n + 1, 9), dtype=object)
     output[0] = np.array(
         [
-            'K',
-            'S',
-            't',
-            'r',
-            'volatility',
-            'd',
-            'Expected Price',
+            'C',
             'C/K',
-            'S/K'
+            'D',
+            'S',
+            'S/K',
+            'k',
+            'r',
+            'sigma',
+            't'
         ]
     )
 
@@ -48,15 +48,15 @@ def generate_options_data(n, call_data):
             )
 
         output[i + 1] = np.array([
-            strike_price,
-            index_price,
-            time_to_expiry,
-            r,
-            volatility,
-            d,
             expected_price,
             expected_price / strike_price,
-            index_price / strike_price
+            d,
+            index_price,
+            index_price / strike_price,
+            strike_price,
+            r,
+            volatility,
+            time_to_expiry
         ])
 
     return output

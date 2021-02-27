@@ -147,9 +147,10 @@ for i, call_option in call_options.iterrows():
     )
 
 call_options['C/K'] = call_options['C'] / call_options['k']
+call_options = call_options.reindex(sorted(call_options.columns), axis=1)
 
 # Save the data in a csv
-call_options.to_csv(DATA_DIR + '/calls.csv')
+call_options.to_csv(DATA_DIR + '/calls.csv', index=False)
 
 put_options = march_option_prices[march_option_prices["Call/Put"] == 1]
 put_options = put_options.drop(["Call/Put"], axis=1)
@@ -166,7 +167,9 @@ for i, put_option in put_options.iterrows():
         put_option['r'],
         put_option['sigma']
     )
+
 put_options['C/K'] = put_options['C'] / put_options['k']
+put_options = put_options.reindex(sorted(put_options.columns), axis=1)
 
 # Save the data in a csv
-put_options.to_csv(DATA_DIR + '/puts.csv')
+put_options.to_csv(DATA_DIR + '/puts.csv', index=False)
