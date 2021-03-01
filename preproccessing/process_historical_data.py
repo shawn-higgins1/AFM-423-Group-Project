@@ -148,6 +148,7 @@ for i, call_option in call_options.iterrows():
 
 call_options['C/K'] = call_options['C'] / call_options['k']
 call_options = call_options.reindex(sorted(call_options.columns), axis=1)
+call_options = call_options.round({'C/K': 5, 'S/K': 5, 't': 4, 'sigma': 4, 'r': 4})
 
 # Save the data in a csv
 call_options.to_csv(DATA_DIR + '/calls.csv', index=False)
@@ -169,6 +170,7 @@ for i, put_option in put_options.iterrows():
     )
 
 put_options['C/K'] = put_options['C'] / put_options['k']
+put_options = put_options.round({'C/K': 5, 'S/K': 5, 't': 4, 'sigma': 4, 'r': 4})
 put_options = put_options.reindex(sorted(put_options.columns), axis=1)
 
 # Save the data in a csv

@@ -47,12 +47,23 @@ def generate_options_data(n, call_data):
                 volatility
             )
 
+        expected_price = np.round(expected_price, 2)
+
+        c_k = np.round(expected_price / strike_price, 5)
+        s_k = np.round(index_price / strike_price, 5)
+
+        if c_k == 0.0:
+            c_k = 0.00001
+
+        if s_k == 0.0:
+            s_k = 0.00001
+
         output[i + 1] = np.array([
             expected_price,
-            expected_price / strike_price,
+            c_k,
             d,
             index_price,
-            index_price / strike_price,
+            s_k,
             strike_price,
             r,
             volatility,
