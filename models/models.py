@@ -143,12 +143,12 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         layer2_model = tuner_2_layer.hypermodel.build(best_hps_2_layer)
 
         start_time = perf_counter()
-        history_1_layer = layer1_model.fit(train_features, train_labels, epochs=25, validation_split=VALIDATION_SPLIT,
+        history_1_layer = layer1_model.fit(train_features, train_labels, epochs=50, validation_split=VALIDATION_SPLIT,
                                            callbacks=[stop_early], verbose=PRINT_TENSORFLOW_PROGRESS)
         print("Elapsed time:", perf_counter() - start_time)
 
         start_time = perf_counter()
-        history_2_layer = layer2_model.fit(train_features, train_labels, epochs=25, validation_split=VALIDATION_SPLIT,
+        history_2_layer = layer2_model.fit(train_features, train_labels, epochs=50, validation_split=VALIDATION_SPLIT,
                                            callbacks=[stop_early], verbose=PRINT_TENSORFLOW_PROGRESS)
         print("Elapsed time:", perf_counter() - start_time)
 
