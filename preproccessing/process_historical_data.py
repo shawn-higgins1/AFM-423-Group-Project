@@ -15,9 +15,10 @@ march_option_prices = pd.read_csv(DATA_DIR + '/quote_SXO_20200101_20200430.csv',
     'Expiry Date',
     'Call/Put',
     'Volume',
+    'Settlement Price',
 ]]
 
-march_option_prices = march_option_prices.rename(columns={'Strike Price': 'k'})
+march_option_prices = march_option_prices.rename(columns={'Strike Price': 'k', 'Settlement Price': 'C'})
 
 # Cleanup the options data removing options that had no volume traded during the day
 march_option_prices = march_option_prices[march_option_prices["Volume"] > 0]
@@ -132,12 +133,12 @@ plt.show()
 # Split the options into calls and puts
 call_options = march_option_prices[march_option_prices["Call/Put"] == 0]
 call_options = call_options.drop(["Call/Put"], axis=1)
-call_options['C'] = 0.0
+call_options['black_scholes'] = 0.0
 call_options['S/K'] = call_options['S'] / call_options['k']
 
 # Calculate the black scholes price for the calls
 for i, call_option in call_options.iterrows():
-    call_options.at[i, 'C'] = black_scholes_calls(
+    call_options.at[i, 'black_scholes'] = black_scholes_calls(
         call_option['S'],
         call_option['D'],
         call_option['t'],
@@ -155,12 +156,12 @@ call_options.to_csv(DATA_DIR + '/calls.csv', index=False)
 
 put_options = march_option_prices[march_option_prices["Call/Put"] == 1]
 put_options = put_options.drop(["Call/Put"], axis=1)
-put_options['C'] = 0.0
+put_options['black_scholes'] = 0.0
 put_options['S/K'] = put_options['S'] / put_options['k']
 
 # Calculate the black scholes price for the puts
 for i, put_option in put_options.iterrows():
-    put_options.at[i, 'C'] = black_scholes_puts(
+    put_options.at[i, 'black_scholes'] = black_scholes_puts(
         put_option['S'],
         put_option['D'],
         put_option['t'],
