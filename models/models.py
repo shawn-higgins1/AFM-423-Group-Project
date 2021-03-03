@@ -22,7 +22,7 @@ np.set_printoptions(precision=3, suppress=True)
 print(tf.__version__)
 
 PRINT_TENSORFLOW_PROGRESS = 0
-PLOT_INDIVIDUAL_LOSSES = False
+SHOW_PLOTS = False
 
 VALIDATION_SPLIT = 0.20
 
@@ -99,7 +99,8 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     model_log_dir = LOG_DIR + f"./{option_type}"
 
     for i in range(len(train_labels)):
-        print(f"Generating {option_type} {model_type} model {i}")
+        print(f"Generating {option_type} {model_type} model {i}. Total train: {len(train_labels[i])} total test: " +
+              f"{len(test_generated_labels[i])}")
 
         tuner_1_layer = kt.Hyperband(model_builder_1_layer,
                                      objective='val_loss',
@@ -170,7 +171,7 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
                 hypermodel = tuner_2_layer.hypermodel.build(best_hps_2_layer)
                 print("The 2 layer model had the lowest loss")
 
-            if PLOT_INDIVIDUAL_LOSSES:
+            if SHOW_PLOTS:
                 plot_loss(history)
 
             val_loss_per_epoch = history.history['val_loss']
@@ -193,9 +194,13 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     y_true = np.array([])
 
     for i in range(len(models)):
-        prediction = models[i].predict(test_generated_features[i],
-                                       verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * test_generated_labels[i]['k']
-        y_pred = np.concatenate((y_pred, prediction))
+        predictions = models[i].predict(test_generated_features[i],
+                                        verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * test_generated_labels[i]['k']
+
+        print(f"Individual performance for the model {i} on the generated data:")
+        calc_performance(predictions, test_generated_labels[i]['C'].to_numpy())
+
+        y_pred = np.concatenate((y_pred, predictions))
         y_true = np.concatenate((y_true, test_generated_labels[i]['C'].to_numpy()))
 
     percentage_errors = []
@@ -206,47 +211,44 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         else:
             percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / 0.001)
 
-    plt.hist(percentage_errors, bins=25)
-    plt.xlabel('Percentage Errors [C/K]')
-    _ = plt.ylabel('Count')
-    plt.show()
-
     print("Median Absolute Percentage Error: " + str(statistics.median(percentage_errors)))
 
-    a = plt.axes(aspect='equal')
-    plt.scatter(y_true, y_pred)
-    plt.xlabel('True Values [C/K]')
-    plt.ylabel('Predictions [C/K]')
-    lims = [0, 500]
-    plt.xlim(lims)
-    plt.ylim(lims)
-    _ = plt.plot(lims, lims)
-    plt.show()
+    if SHOW_PLOTS:
+        plt.hist(percentage_errors, bins=25)
+        plt.xlabel('Percentage Errors [C/K]')
+        _ = plt.ylabel('Count')
+        plt.show()
 
-    error = y_pred - y_true
-    plt.hist(error, bins=25)
-    plt.xlabel('Prediction Error [C/K]')
-    _ = plt.ylabel('Count')
-    plt.show()
+        a = plt.axes(aspect='equal')
+        plt.scatter(y_true, y_pred)
+        plt.xlabel('True Values [C/K]')
+        plt.ylabel('Predictions [C/K]')
+        lims = [0, 350]
+        plt.xlim(lims)
+        plt.ylim(lims)
+        _ = plt.plot(lims, lims)
+        plt.show()
 
-    mape = tf.keras.losses.MeanAbsolutePercentageError()
-    mae = tf.keras.losses.MeanAbsoluteError()
-    mse = tf.keras.losses.MeanSquaredError()
-    r_squared = tfa.metrics.RSquare()
+        error = y_pred - y_true
+        plt.hist(error, bins=25)
+        plt.xlabel('Prediction Error [C/K]')
+        _ = plt.ylabel('Count')
+        plt.show()
 
-    print(f"""
-    mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {mae(y_true, y_pred).numpy()}, 
-    r^2: {r_squared(y_true, y_pred).numpy()}
-    """)
+    calc_performance(y_pred, y_true)
 
     y_pred = np.array([])
     y_true = np.array([])
 
     for i in range(len(models)):
         if len(test_real_labels[i]) > 0:
-            prediction = models[i].predict(test_real_features[i],
-                                           verbose=PRINT_TENSORFLOW_PROGRESS).flatten()
-            y_pred = np.concatenate((y_pred, prediction), axis=0) * test_real_labels[i]['k']
+            predictions = models[i].predict(test_real_features[i],
+                                            verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * test_real_labels[i]['k']
+
+            print(f"Individual performance for the model {i} on the real data:")
+            calc_performance(predictions, test_real_labels[i]['C'].to_numpy())
+
+            y_pred = np.concatenate((y_pred, predictions), axis=0)
             y_true = np.concatenate((y_true, test_real_labels[i]['C'].to_numpy()))
 
     if len(y_true) > 0:
@@ -262,15 +264,19 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
         print("Median Absolute Percentage Error: " + str(statistics.median(percentage_errors)))
 
-        mape = tf.keras.losses.MeanAbsolutePercentageError()
-        mae = tf.keras.losses.MeanAbsoluteError()
-        mse = tf.keras.losses.MeanSquaredError()
-        r_squared = tfa.metrics.RSquare()
+        calc_performance(y_pred, y_true)
 
-        print(f"""
-            mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {mae(y_true, y_pred).numpy()}, 
-            r^2: {r_squared(y_true, y_pred).numpy()}
-            """)
+
+def calc_performance(y_pred, y_true):
+    mape = tf.keras.losses.MeanAbsolutePercentageError()
+    mae = tf.keras.losses.MeanAbsoluteError()
+    mse = tf.keras.losses.MeanSquaredError()
+    r_squared = tfa.metrics.RSquare()
+
+    print(f"""
+    mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {mae(y_true, y_pred).numpy()}, 
+    r^2: {r_squared(y_true, y_pred).numpy()}
+    """)
 
 
 def train_and_test_all_models(option_type):
@@ -293,8 +299,43 @@ def train_and_test_all_models(option_type):
     test_labels_generated = test_dataset_generated[['C', 'k']]
     test_labels_real = test_dataset_real[['C', 'k']]
 
-    train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
-                         [test_labels_generated], [test_features_real], [test_labels_real])
+    # train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
+    #                      [test_labels_generated], [test_features_real], [test_labels_real])
+
+    split_funcs = [
+        lambda x: x['S/K'] > 1.05,
+        lambda x: x['S/K'] < 0.97,
+        lambda x: 0.97 <= x['S/K'] <= 1.05,
+    ]
+
+    mnn1_train_features = []
+    mnn1_train_labels = []
+
+    mnn1_test_features_generated = []
+    mnn1_test_labels_generated = []
+
+    mnn1_test_features_real = []
+    mnn1_test_labels_real = []
+
+    for split_func in split_funcs:
+        filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
+
+        mnn1_train_features.append(filtered_dataset[features])
+        mnn1_train_labels.append(filtered_dataset['C/K'])
+
+        filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
+
+        mnn1_test_features_generated.append(filtered_dataset[features])
+        mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
+
+        filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
+
+        mnn1_test_features_real.append(filtered_dataset[features])
+        mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
+
+    print(len(mnn1_train_features))
+    train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
+                         mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
 
 
 print("Black Scholes Performance on the real test data for puts:")
