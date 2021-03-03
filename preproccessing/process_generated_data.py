@@ -72,14 +72,14 @@ DATA_DIR = "../data"
 
 np.random.seed(123)
 
-train_data = generate_options_data(10000, True)
-test_data = generate_options_data(1000, True)
+train_data = generate_options_data(50000, True)
+test_data = generate_options_data(5000, True)
 
 np.savetxt(DATA_DIR + "/train_calls.csv", train_data, delimiter=",", fmt='%s')
 np.savetxt(DATA_DIR + "/test_calls.csv", test_data, delimiter=",", fmt='%s')
 
-train_data = generate_options_data(10000, False)
-test_data = generate_options_data(1000, False)
+train_data = generate_options_data(50000, False)
+test_data = generate_options_data(5000, False)
 
 np.savetxt(DATA_DIR + "/train_puts.csv", train_data, delimiter=",", fmt='%s')
 np.savetxt(DATA_DIR + "/test_puts.csv", test_data, delimiter=",", fmt='%s')
