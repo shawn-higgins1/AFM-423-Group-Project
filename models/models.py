@@ -276,25 +276,25 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 def train_and_test_all_models(option_type):
     # Load in the data
     raw_train = pd.read_csv(DATA_DIR + f"/train_{option_type}.csv", sep=',')
-    raw_test1 = pd.read_csv(DATA_DIR + f"/test_{option_type}.csv", sep=',')
-    raw_test2 = pd.read_csv(DATA_DIR + f"/{option_type}.csv", sep=',')
+    raw_test_generated = pd.read_csv(DATA_DIR + f"/test_{option_type}.csv", sep=',')
+    raw_test_real = pd.read_csv(DATA_DIR + f"/{option_type}.csv", sep=',')
 
     features = ['S/K', 't', 'D', 'r', 'sigma']
 
     train_dataset = raw_train.copy()
-    test1_dataset = raw_test1.copy()
-    test2_dataset = raw_test2.copy()
+    test_dataset_generated = raw_test_generated.copy()
+    test_dataset_real = raw_test_real.copy()
 
     train_features = train_dataset[features]
-    test1_features = test1_dataset[features]
-    test2_features = test2_dataset[features]
+    test_features_generated = test_dataset_generated[features]
+    test_features_real = test_dataset_real[features]
 
     train_labels = train_dataset['C/K']
-    test1_labels = test1_dataset[['C', 'k']]
-    test2_labels = test2_dataset[['C', 'k']]
+    test_labels_generated = test_dataset_generated[['C', 'k']]
+    test_labels_real = test_dataset_real[['C', 'k']]
 
-    train_and_test_model("ANN", option_type, [train_features], [train_labels], [test1_features], [test1_labels],
-                         [test2_features], [test2_labels])
+    train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
+                         [test_labels_generated], [test_features_real], [test_labels_real])
 
 
 print("Black Scholes Performance on the real test data for puts:")
