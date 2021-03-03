@@ -24,7 +24,7 @@ print(tf.__version__)
 PRINT_TENSORFLOW_PROGRESS = 0
 PLOT_INDIVIDUAL_LOSSES = False
 
-VALIDATION_SPLIT = 0.25
+VALIDATION_SPLIT = 0.20
 
 DATA_DIR = "../data"
 LOG_DIR = "./logs"
@@ -88,7 +88,8 @@ def model_builder_2_layer(hp):
     return model
 
 
-def train_and_test_model(model_type, option_type, train_features, train_labels, test_generated_features, test_generated_labels,
+def train_and_test_model(model_type, option_type, train_features, train_labels, test_generated_features,
+                         test_generated_labels,
                          test_real_features, test_real_labels):
     stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
 
@@ -192,15 +193,18 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     y_true = np.array([])
 
     for i in range(len(models)):
-        test = models[i].predict(test_generated_features[i],
-                                 verbose=PRINT_TENSORFLOW_PROGRESS).flatten()
-        y_pred = np.concatenate((y_pred, test))
-        y_true = np.concatenate((y_true, test_generated_labels[i].to_numpy()))
+        prediction = models[i].predict(test_generated_features[i],
+                                       verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * test_generated_labels[i]['k']
+        y_pred = np.concatenate((y_pred, prediction))
+        y_true = np.concatenate((y_true, test_generated_labels[i]['C'].to_numpy()))
 
     percentage_errors = []
 
     for i in range(len(y_pred)):
-        percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / y_true[i])
+        if y_true[i] != 0:
+            percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / y_true[i])
+        else:
+            percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / 0.001)
 
     plt.hist(percentage_errors, bins=25)
     plt.xlabel('Percentage Errors [C/K]')
@@ -213,7 +217,7 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     plt.scatter(y_true, y_pred)
     plt.xlabel('True Values [C/K]')
     plt.ylabel('Predictions [C/K]')
-    lims = [0, 0.5]
+    lims = [0, 500]
     plt.xlim(lims)
     plt.ylim(lims)
     _ = plt.plot(lims, lims)
@@ -240,10 +244,10 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
     for i in range(len(models)):
         if len(test_real_labels[i]) > 0:
-            y_pred = np.concatenate((y_pred,
-                                     models[i].predict(test_real_features[i],
-                                                       verbose=PRINT_TENSORFLOW_PROGRESS).flatten()), axis=0)
-            y_true = np.concatenate((y_true, test_real_labels[i].to_numpy()))
+            prediction = models[i].predict(test_real_features[i],
+                                           verbose=PRINT_TENSORFLOW_PROGRESS).flatten()
+            y_pred = np.concatenate((y_pred, prediction), axis=0) * test_real_labels[i]['k']
+            y_true = np.concatenate((y_true, test_real_labels[i]['C'].to_numpy()))
 
     if len(y_true) > 0:
         print("Performance against the real test data:")
@@ -251,7 +255,10 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         percentage_errors = []
 
         for i in range(len(y_pred)):
-            percentage_errors.append(np.abs(y_true[i] - y_pred[i]) / y_pred[i])
+            if y_true[i] != 0:
+                percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / y_true[i])
+            else:
+                percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / 0.001)
 
         print("Median Absolute Percentage Error: " + str(statistics.median(percentage_errors)))
 
@@ -283,8 +290,8 @@ def train_and_test_all_models(option_type):
     test2_features = test2_dataset[features]
 
     train_labels = train_dataset['C/K']
-    test1_labels = test1_dataset['C/K']
-    test2_labels = test2_dataset['C/K']
+    test1_labels = test1_dataset[['C', 'k']]
+    test2_labels = test2_dataset[['C', 'k']]
 
     train_and_test_model("ANN", option_type, [train_features], [train_labels], [test1_features], [test1_labels],
                          [test2_features], [test2_labels])
@@ -294,8 +301,8 @@ print("Black Scholes Performance on the real test data for puts:")
 
 real_data = pd.read_csv(DATA_DIR + "/puts.csv", sep=',')
 
-y_true = real_data['C/K']
-y_pred = real_data['black_scholes'] / real_data['k']
+y_true = real_data['C']
+y_pred = real_data['black_scholes']
 
 mape = tf.keras.losses.MeanAbsolutePercentageError()
 mae = tf.keras.losses.MeanAbsoluteError()
