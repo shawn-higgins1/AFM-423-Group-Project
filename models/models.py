@@ -49,11 +49,11 @@ def plot_loss(history):
 def model_builder_1_layer(hp):
     model = keras.Sequential()
 
-    hp_units = hp.Int('units', min_value=1, max_value=32, step=2)
-    model.add(keras.layers.Dense(units=hp_units, activation='relu'))
+    hp_units = hp.Int('units', min_value=2, max_value=64, step=4)
+    model.add(keras.layers.Dense(units=hp_units, activation=tf.keras.layers.LeakyReLU(alpha=0.1)))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 0.05, 1e-2, 1e-3])
+    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 0.05, 1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
@@ -69,13 +69,13 @@ def model_builder_1_layer(hp):
 def model_builder_2_layer(hp):
     model = keras.Sequential()
 
-    hp_units_1 = hp.Int('first_units', min_value=1, max_value=16, step=2)
-    model.add(keras.layers.Dense(units=hp_units_1, activation='relu'))
-    hp_units_2 = hp.Int('second_units', min_value=1, max_value=16, step=2)
-    model.add(keras.layers.Dense(units=hp_units_2, activation='relu'))
+    hp_units_1 = hp.Int('first_units', min_value=2, max_value=32, step=2)
+    model.add(keras.layers.Dense(units=hp_units_1, activation=tf.keras.layers.LeakyReLU(alpha=0.1)))
+    hp_units_2 = hp.Int('second_units', min_value=2, max_value=32, step=2)
+    model.add(keras.layers.Dense(units=hp_units_2, activation=tf.keras.layers.LeakyReLU(alpha=0.1)))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 0.05, 1e-2, 1e-3])
+    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 0.05, 1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
@@ -91,8 +91,6 @@ def model_builder_2_layer(hp):
 def train_and_test_model(model_type, option_type, train_features, train_labels, test_generated_features,
                          test_generated_labels,
                          test_real_features, test_real_labels):
-    stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
-
     models = []
 
     model_checkpoint_dir = f"./{option_type}"
@@ -102,14 +100,16 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         print(f"Generating {option_type} {model_type} model {i}. Total train: {len(train_labels[i])} total test: " +
               f"{len(test_generated_labels[i])}")
 
+        stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
+
         tuner_1_layer = kt.Hyperband(model_builder_1_layer,
                                      objective='val_loss',
-                                     max_epochs=15,
+                                     max_epochs=25,
                                      factor=3,
                                      directory=model_checkpoint_dir + f"/{model_type}_{i}",
                                      project_name='1_layer')
 
-        tuner_1_layer.search(train_features[i], train_labels[i], epochs=50, validation_split=VALIDATION_SPLIT,
+        tuner_1_layer.search(train_features[i], train_labels[i], epochs=100, validation_split=VALIDATION_SPLIT,
                              callbacks=[stop_early,
                                         tf.keras.callbacks.TensorBoard(
                                             model_log_dir + f"/{model_type}_{i}/tuning/1_layer"
@@ -125,12 +125,12 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
         tuner_2_layer = kt.Hyperband(model_builder_2_layer,
                                      objective='val_loss',
-                                     max_epochs=15,
+                                     max_epochs=25,
                                      factor=3,
                                      directory=model_checkpoint_dir + f"/{model_type}_{i}",
                                      project_name='2_layer')
 
-        tuner_2_layer.search(train_features[i], train_labels[i], epochs=50, validation_split=VALIDATION_SPLIT,
+        tuner_2_layer.search(train_features[i], train_labels[i], epochs=100, validation_split=VALIDATION_SPLIT,
                              callbacks=[stop_early,
                                         tf.keras.callbacks.TensorBoard(
                                             model_log_dir + f"/{model_type}_{i}/tuning/2_layer")
@@ -151,39 +151,28 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
             layer2_model = tuner_2_layer.hypermodel.build(best_hps_2_layer)
 
             start_time = perf_counter()
-            history_1_layer = layer1_model.fit(train_features[i], train_labels[i], epochs=50,
+            history_1_layer = layer1_model.fit(train_features[i], train_labels[i], epochs=100,
                                                validation_split=VALIDATION_SPLIT,
-                                               callbacks=[stop_early], verbose=PRINT_TENSORFLOW_PROGRESS)
+                                               verbose=PRINT_TENSORFLOW_PROGRESS)
             print("Elapsed time:", perf_counter() - start_time)
 
             start_time = perf_counter()
-            history_2_layer = layer2_model.fit(train_features[i], train_labels[i], epochs=50,
+            history_2_layer = layer2_model.fit(train_features[i], train_labels[i], epochs=100,
                                                validation_split=VALIDATION_SPLIT,
-                                               callbacks=[stop_early], verbose=PRINT_TENSORFLOW_PROGRESS)
+                                               verbose=PRINT_TENSORFLOW_PROGRESS)
             print("Elapsed time:", perf_counter() - start_time)
 
             if history_2_layer.history['val_loss'] > history_1_layer.history['val_loss']:
                 history = history_1_layer
-                hypermodel = tuner_1_layer.hypermodel.build(best_hps_1_layer)
+                hypermodel = layer1_model
                 print("The 1 layer model had the lowest loss")
             else:
                 history = history_2_layer
-                hypermodel = tuner_2_layer.hypermodel.build(best_hps_2_layer)
+                hypermodel = layer2_model
                 print("The 2 layer model had the lowest loss")
 
             if SHOW_PLOTS:
                 plot_loss(history)
-
-            val_loss_per_epoch = history.history['val_loss']
-            best_epoch = val_loss_per_epoch.index(min(val_loss_per_epoch)) + 1
-            print('Best epoch: %d' % (best_epoch,))
-
-            # Retrain the model
-            start_time = perf_counter()
-            hypermodel.fit(train_features[i], train_labels[i], epochs=best_epoch,
-                           callbacks=[tf.keras.callbacks.TensorBoard(model_log_dir + f"/{model_type}_{i}/best")],
-                           verbose=PRINT_TENSORFLOW_PROGRESS)
-            print("Elapsed time:", perf_counter() - start_time)
 
             hypermodel.save(save_path)
             models.append(hypermodel)
@@ -195,7 +184,13 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
     for i in range(len(models)):
         predictions = models[i].predict(test_generated_features[i],
-                                        verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * test_generated_labels[i]['k']
+                                        verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * \
+                      test_generated_labels[i]['k'].to_numpy()
+
+        maxer = lambda x: max(x, 0)
+        vector_maxer = np.vectorize(maxer)
+
+        predictions = vector_maxer(predictions)
 
         print(f"Individual performance for the model {i} on the generated data:")
         calc_performance(predictions, test_generated_labels[i]['C'].to_numpy())
@@ -243,7 +238,13 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     for i in range(len(models)):
         if len(test_real_labels[i]) > 0:
             predictions = models[i].predict(test_real_features[i],
-                                            verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * test_real_labels[i]['k']
+                                            verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * \
+                          test_real_labels[i]['k'].to_numpy()
+
+            maxer = lambda x: max(x, 0)
+            vector_maxer = np.vectorize(maxer)
+
+            predictions = vector_maxer(predictions)
 
             print(f"Individual performance for the model {i} on the real data:")
             calc_performance(predictions, test_real_labels[i]['C'].to_numpy())
@@ -268,9 +269,9 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
 
 def calc_performance(y_pred, y_true):
-    mape = tf.keras.losses.MeanAbsolutePercentageError()
-    mae = tf.keras.losses.MeanAbsoluteError()
-    mse = tf.keras.losses.MeanSquaredError()
+    mape = tf.keras.metrics.MeanAbsolutePercentageError()
+    mae = tf.keras.metrics.MeanAbsoluteError()
+    mse = tf.keras.metrics.MeanSquaredError()
     r_squared = tfa.metrics.RSquare()
 
     print(f"""
@@ -299,15 +300,21 @@ def train_and_test_all_models(option_type):
     test_labels_generated = test_dataset_generated[['C', 'k']]
     test_labels_real = test_dataset_real[['C', 'k']]
 
-    # train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
-    #                      [test_labels_generated], [test_features_real], [test_labels_real])
+    train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
+                         [test_labels_generated], [test_features_real], [test_labels_real])
 
-    split_funcs = [
-        lambda x: x['S/K'] > 1.05,
-        lambda x: x['S/K'] < 0.97,
-        lambda x: 0.97 <= x['S/K'] <= 1.05,
-    ]
-
+    if option_type == 'calls':
+        split_funcs = [
+            lambda x: x['S/K'] > 1.05,
+            lambda x: x['S/K'] < 0.97,
+            lambda x: 0.97 <= x['S/K'] <= 1.05,
+        ]
+    else:
+        split_funcs = [
+            lambda x: x['S/K'] > 1.03,
+            lambda x: x['S/K'] < 0.95,
+            lambda x: 0.95 <= x['S/K'] <= 1.03,
+        ]
     mnn1_train_features = []
     mnn1_train_labels = []
 
@@ -333,9 +340,60 @@ def train_and_test_all_models(option_type):
         mnn1_test_features_real.append(filtered_dataset[features])
         mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
 
-    print(len(mnn1_train_features))
     train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
                          mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
+
+    if option_type == 'calls':
+        split_funcs = [
+            lambda x: x['S/K'] > 1.05 and x['t'] < 0.1,
+            lambda x: x['S/K'] < 0.97 and x['t'] < 0.1,
+            lambda x: 0.97 <= x['S/K'] <= 1.05 and x['t'] < 0.1,
+            lambda x: x['S/K'] > 1.05 and x['t'] > 0.2,
+            lambda x: x['S/K'] < 0.97 and x['t'] > 0.2,
+            lambda x: 0.97 <= x['S/K'] <= 1.05 and x['t'] > 0.2,
+            lambda x: x['S/K'] > 1.05 and 0.1 <= x['t'] <= 0.2,
+            lambda x: x['S/K'] < 0.97 and 0.1 <= x['t'] <= 0.2,
+            lambda x: 0.97 <= x['S/K'] <= 1.05 and 0.1 <= x['t'] <= 0.2,
+        ]
+    else:
+        split_funcs = [
+            lambda x: x['S/K'] > 1.03 and x['t'] < 0.1,
+            lambda x: x['S/K'] < 0.95 and x['t'] < 0.1,
+            lambda x: 0.95 <= x['S/K'] <= 1.03 and x['t'] < 0.1,
+            lambda x: x['S/K'] > 1.03 and x['t'] > 0.2,
+            lambda x: x['S/K'] < 0.95 and x['t'] > 0.2,
+            lambda x: 0.95 <= x['S/K'] <= 1.03 and x['t'] > 0.2,
+            lambda x: x['S/K'] > 1.03 and 0.1 <= x['t'] <= 0.2,
+            lambda x: x['S/K'] < 0.95 and 0.1 <= x['t'] <= 0.2,
+            lambda x: 0.95 <= x['S/K'] <= 1.03 and 0.1 <= x['t'] <= 0.2,
+        ]
+    mnn2_train_features = []
+    mnn2_train_labels = []
+
+    mnn2_test_features_generated = []
+    mnn2_test_labels_generated = []
+
+    mnn2_test_features_real = []
+    mnn2_test_labels_real = []
+
+    for split_func in split_funcs:
+        filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
+
+        mnn2_train_features.append(filtered_dataset[features])
+        mnn2_train_labels.append(filtered_dataset['C/K'])
+
+        filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
+
+        mnn2_test_features_generated.append(filtered_dataset[features])
+        mnn2_test_labels_generated.append(filtered_dataset[['C', 'k']])
+
+        filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
+
+        mnn2_test_features_real.append(filtered_dataset[features])
+        mnn2_test_labels_real.append(filtered_dataset[['C', 'k']])
+
+    train_and_test_model("MNN2", option_type, mnn2_train_features, mnn2_train_labels, mnn2_test_features_generated,
+                         mnn2_test_labels_generated, mnn2_test_features_real, mnn2_test_labels_real)
 
 
 print("Black Scholes Performance on the real test data for puts:")
@@ -355,5 +413,7 @@ mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {
 r^2: {r_squared(y_true, y_pred).numpy()}
 """)
 
-train_and_test_all_models("calls")
+start_time = perf_counter()
 train_and_test_all_models("puts")
+train_and_test_all_models("calls")
+print("Total time ", perf_counter() - start_time)
