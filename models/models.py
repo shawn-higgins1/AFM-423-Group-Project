@@ -22,7 +22,7 @@ np.set_printoptions(precision=3, suppress=True)
 print(tf.__version__)
 
 PRINT_TENSORFLOW_PROGRESS = 0
-SHOW_PLOTS = False
+SHOW_PLOTS = True
 
 VALIDATION_SPLIT = 0.20
 
@@ -49,11 +49,11 @@ def plot_loss(history):
 def model_builder_1_layer(hp):
     model = keras.Sequential()
 
-    hp_units = hp.Int('units', min_value=2, max_value=64, step=4)
-    model.add(keras.layers.Dense(units=hp_units, activation=tf.keras.layers.LeakyReLU(alpha=0.1)))
+    hp_units = hp.Choice('units', values=[4, 12, 16, 24, 32, 48, 64])
+    model.add(keras.layers.Dense(units=hp_units, activation="relu"))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 0.05, 1e-2, 1e-3, 1e-4])
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
@@ -69,13 +69,13 @@ def model_builder_1_layer(hp):
 def model_builder_2_layer(hp):
     model = keras.Sequential()
 
-    hp_units_1 = hp.Int('first_units', min_value=2, max_value=32, step=2)
-    model.add(keras.layers.Dense(units=hp_units_1, activation=tf.keras.layers.LeakyReLU(alpha=0.1)))
-    hp_units_2 = hp.Int('second_units', min_value=2, max_value=32, step=2)
-    model.add(keras.layers.Dense(units=hp_units_2, activation=tf.keras.layers.LeakyReLU(alpha=0.1)))
+    hp_units_1 = hp.Choice('first_units', values=[4, 12, 16, 24, 32])
+    model.add(keras.layers.Dense(units=hp_units_1, activation="relu"))
+    hp_units_2 = hp.Choice('second_units', values=[4, 12, 16, 24, 32])
+    model.add(keras.layers.Dense(units=hp_units_2, activation="relu"))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 0.05, 1e-2, 1e-3, 1e-4])
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
@@ -151,28 +151,30 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
             layer2_model = tuner_2_layer.hypermodel.build(best_hps_2_layer)
 
             start_time = perf_counter()
-            history_1_layer = layer1_model.fit(train_features[i], train_labels[i], epochs=100,
+            history_1_layer = layer1_model.fit(train_features[i], train_labels[i], epochs=200,
                                                validation_split=VALIDATION_SPLIT,
                                                verbose=PRINT_TENSORFLOW_PROGRESS)
             print("Elapsed time:", perf_counter() - start_time)
 
             start_time = perf_counter()
-            history_2_layer = layer2_model.fit(train_features[i], train_labels[i], epochs=100,
+            history_2_layer = layer2_model.fit(train_features[i], train_labels[i], epochs=200,
                                                validation_split=VALIDATION_SPLIT,
                                                verbose=PRINT_TENSORFLOW_PROGRESS)
             print("Elapsed time:", perf_counter() - start_time)
 
-            if history_2_layer.history['val_loss'] > history_1_layer.history['val_loss']:
-                history = history_1_layer
+            if SHOW_PLOTS:
+                plot_loss(history_1_layer)
+                plot_loss(history_2_layer)
+
+            layer_1_loss = np.average(history_1_layer.history['val_loss'][-20:])
+            layer_2_loss = np.average(history_2_layer.history['val_loss'][-20:])
+
+            if layer_2_loss > layer_1_loss:
                 hypermodel = layer1_model
                 print("The 1 layer model had the lowest loss")
             else:
-                history = history_2_layer
                 hypermodel = layer2_model
                 print("The 2 layer model had the lowest loss")
-
-            if SHOW_PLOTS:
-                plot_loss(history)
 
             hypermodel.save(save_path)
             models.append(hypermodel)
@@ -181,6 +183,8 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
     y_pred = np.array([])
     y_true = np.array([])
+
+    print(models[0].summary())
 
     for i in range(len(models)):
         predictions = models[i].predict(test_generated_features[i],
@@ -303,97 +307,97 @@ def train_and_test_all_models(option_type):
     train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
                          [test_labels_generated], [test_features_real], [test_labels_real])
 
-    if option_type == 'calls':
-        split_funcs = [
-            lambda x: x['S/K'] > 1.05,
-            lambda x: x['S/K'] < 0.97,
-            lambda x: 0.97 <= x['S/K'] <= 1.05,
-        ]
-    else:
-        split_funcs = [
-            lambda x: x['S/K'] > 1.03,
-            lambda x: x['S/K'] < 0.95,
-            lambda x: 0.95 <= x['S/K'] <= 1.03,
-        ]
-    mnn1_train_features = []
-    mnn1_train_labels = []
-
-    mnn1_test_features_generated = []
-    mnn1_test_labels_generated = []
-
-    mnn1_test_features_real = []
-    mnn1_test_labels_real = []
-
-    for split_func in split_funcs:
-        filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
-
-        mnn1_train_features.append(filtered_dataset[features])
-        mnn1_train_labels.append(filtered_dataset['C/K'])
-
-        filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
-
-        mnn1_test_features_generated.append(filtered_dataset[features])
-        mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
-
-        filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
-
-        mnn1_test_features_real.append(filtered_dataset[features])
-        mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
-
-    train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
-                         mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
-
-    if option_type == 'calls':
-        split_funcs = [
-            lambda x: x['S/K'] > 1.05 and x['t'] < 0.1,
-            lambda x: x['S/K'] < 0.97 and x['t'] < 0.1,
-            lambda x: 0.97 <= x['S/K'] <= 1.05 and x['t'] < 0.1,
-            lambda x: x['S/K'] > 1.05 and x['t'] > 0.2,
-            lambda x: x['S/K'] < 0.97 and x['t'] > 0.2,
-            lambda x: 0.97 <= x['S/K'] <= 1.05 and x['t'] > 0.2,
-            lambda x: x['S/K'] > 1.05 and 0.1 <= x['t'] <= 0.2,
-            lambda x: x['S/K'] < 0.97 and 0.1 <= x['t'] <= 0.2,
-            lambda x: 0.97 <= x['S/K'] <= 1.05 and 0.1 <= x['t'] <= 0.2,
-        ]
-    else:
-        split_funcs = [
-            lambda x: x['S/K'] > 1.03 and x['t'] < 0.1,
-            lambda x: x['S/K'] < 0.95 and x['t'] < 0.1,
-            lambda x: 0.95 <= x['S/K'] <= 1.03 and x['t'] < 0.1,
-            lambda x: x['S/K'] > 1.03 and x['t'] > 0.2,
-            lambda x: x['S/K'] < 0.95 and x['t'] > 0.2,
-            lambda x: 0.95 <= x['S/K'] <= 1.03 and x['t'] > 0.2,
-            lambda x: x['S/K'] > 1.03 and 0.1 <= x['t'] <= 0.2,
-            lambda x: x['S/K'] < 0.95 and 0.1 <= x['t'] <= 0.2,
-            lambda x: 0.95 <= x['S/K'] <= 1.03 and 0.1 <= x['t'] <= 0.2,
-        ]
-    mnn2_train_features = []
-    mnn2_train_labels = []
-
-    mnn2_test_features_generated = []
-    mnn2_test_labels_generated = []
-
-    mnn2_test_features_real = []
-    mnn2_test_labels_real = []
-
-    for split_func in split_funcs:
-        filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
-
-        mnn2_train_features.append(filtered_dataset[features])
-        mnn2_train_labels.append(filtered_dataset['C/K'])
-
-        filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
-
-        mnn2_test_features_generated.append(filtered_dataset[features])
-        mnn2_test_labels_generated.append(filtered_dataset[['C', 'k']])
-
-        filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
-
-        mnn2_test_features_real.append(filtered_dataset[features])
-        mnn2_test_labels_real.append(filtered_dataset[['C', 'k']])
-
-    train_and_test_model("MNN2", option_type, mnn2_train_features, mnn2_train_labels, mnn2_test_features_generated,
-                         mnn2_test_labels_generated, mnn2_test_features_real, mnn2_test_labels_real)
+    # if option_type == 'calls':
+    #     split_funcs = [
+    #         lambda x: x['S/K'] > 1.05,
+    #         lambda x: x['S/K'] < 0.97,
+    #         lambda x: 0.97 <= x['S/K'] <= 1.05,
+    #     ]
+    # else:
+    #     split_funcs = [
+    #         lambda x: x['S/K'] > 1.03,
+    #         lambda x: x['S/K'] < 0.95,
+    #         lambda x: 0.95 <= x['S/K'] <= 1.03,
+    #     ]
+    # mnn1_train_features = []
+    # mnn1_train_labels = []
+    #
+    # mnn1_test_features_generated = []
+    # mnn1_test_labels_generated = []
+    #
+    # mnn1_test_features_real = []
+    # mnn1_test_labels_real = []
+    #
+    # for split_func in split_funcs:
+    #     filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
+    #
+    #     mnn1_train_features.append(filtered_dataset[features])
+    #     mnn1_train_labels.append(filtered_dataset['C/K'])
+    #
+    #     filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
+    #
+    #     mnn1_test_features_generated.append(filtered_dataset[features])
+    #     mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
+    #
+    #     filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
+    #
+    #     mnn1_test_features_real.append(filtered_dataset[features])
+    #     mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
+    #
+    # train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
+    #                      mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
+    #
+    # if option_type == 'calls':
+    #     split_funcs = [
+    #         lambda x: x['S/K'] > 1.05 and x['t'] < 0.1,
+    #         lambda x: x['S/K'] < 0.97 and x['t'] < 0.1,
+    #         lambda x: 0.97 <= x['S/K'] <= 1.05 and x['t'] < 0.1,
+    #         lambda x: x['S/K'] > 1.05 and x['t'] > 0.2,
+    #         lambda x: x['S/K'] < 0.97 and x['t'] > 0.2,
+    #         lambda x: 0.97 <= x['S/K'] <= 1.05 and x['t'] > 0.2,
+    #         lambda x: x['S/K'] > 1.05 and 0.1 <= x['t'] <= 0.2,
+    #         lambda x: x['S/K'] < 0.97 and 0.1 <= x['t'] <= 0.2,
+    #         lambda x: 0.97 <= x['S/K'] <= 1.05 and 0.1 <= x['t'] <= 0.2,
+    #     ]
+    # else:
+    #     split_funcs = [
+    #         lambda x: x['S/K'] > 1.03 and x['t'] < 0.1,
+    #         lambda x: x['S/K'] < 0.95 and x['t'] < 0.1,
+    #         lambda x: 0.95 <= x['S/K'] <= 1.03 and x['t'] < 0.1,
+    #         lambda x: x['S/K'] > 1.03 and x['t'] > 0.2,
+    #         lambda x: x['S/K'] < 0.95 and x['t'] > 0.2,
+    #         lambda x: 0.95 <= x['S/K'] <= 1.03 and x['t'] > 0.2,
+    #         lambda x: x['S/K'] > 1.03 and 0.1 <= x['t'] <= 0.2,
+    #         lambda x: x['S/K'] < 0.95 and 0.1 <= x['t'] <= 0.2,
+    #         lambda x: 0.95 <= x['S/K'] <= 1.03 and 0.1 <= x['t'] <= 0.2,
+    #     ]
+    # mnn2_train_features = []
+    # mnn2_train_labels = []
+    #
+    # mnn2_test_features_generated = []
+    # mnn2_test_labels_generated = []
+    #
+    # mnn2_test_features_real = []
+    # mnn2_test_labels_real = []
+    #
+    # for split_func in split_funcs:
+    #     filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
+    #
+    #     mnn2_train_features.append(filtered_dataset[features])
+    #     mnn2_train_labels.append(filtered_dataset['C/K'])
+    #
+    #     filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
+    #
+    #     mnn2_test_features_generated.append(filtered_dataset[features])
+    #     mnn2_test_labels_generated.append(filtered_dataset[['C', 'k']])
+    #
+    #     filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
+    #
+    #     mnn2_test_features_real.append(filtered_dataset[features])
+    #     mnn2_test_labels_real.append(filtered_dataset[['C', 'k']])
+    #
+    # train_and_test_model("MNN2", option_type, mnn2_train_features, mnn2_train_labels, mnn2_test_features_generated,
+    #                      mnn2_test_labels_generated, mnn2_test_features_real, mnn2_test_labels_real)
 
 
 print("Black Scholes Performance on the real test data for puts:")
@@ -415,5 +419,5 @@ r^2: {r_squared(y_true, y_pred).numpy()}
 
 start_time = perf_counter()
 train_and_test_all_models("puts")
-train_and_test_all_models("calls")
+# train_and_test_all_models("calls")
 print("Total time ", perf_counter() - start_time)
