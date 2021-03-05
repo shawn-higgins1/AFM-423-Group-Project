@@ -302,48 +302,48 @@ def train_and_test_all_models(option_type):
     test_labels_generated = test_dataset_generated[['C', 'k']]
     test_labels_real = test_dataset_real[['C', 'k']]
 
-    # train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
-    #                      [test_labels_generated], [test_features_real], [test_labels_real])
-    #
-    # if option_type == 'calls':
-    #     split_funcs = [
-    #         lambda x: x['S/K'] > 1.05,
-    #         lambda x: x['S/K'] < 0.97,
-    #         lambda x: 0.97 <= x['S/K'] <= 1.05,
-    #     ]
-    # else:
-    #     split_funcs = [
-    #         lambda x: x['S/K'] > 1.03,
-    #         lambda x: x['S/K'] < 0.95,
-    #         lambda x: 0.95 <= x['S/K'] <= 1.03,
-    #     ]
-    # mnn1_train_features = []
-    # mnn1_train_labels = []
-    #
-    # mnn1_test_features_generated = []
-    # mnn1_test_labels_generated = []
-    #
-    # mnn1_test_features_real = []
-    # mnn1_test_labels_real = []
-    #
-    # for split_func in split_funcs:
-    #     filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
-    #
-    #     mnn1_train_features.append(filtered_dataset[features])
-    #     mnn1_train_labels.append(filtered_dataset['C/K'])
-    #
-    #     filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
-    #
-    #     mnn1_test_features_generated.append(filtered_dataset[features])
-    #     mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
-    #
-    #     filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
-    #
-    #     mnn1_test_features_real.append(filtered_dataset[features])
-    #     mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
-    #
-    # train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
-    #                      mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
+    train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
+                         [test_labels_generated], [test_features_real], [test_labels_real])
+
+    if option_type == 'calls':
+        split_funcs = [
+            lambda x: x['S/K'] > 1.05,
+            lambda x: x['S/K'] < 0.97,
+            lambda x: 0.97 <= x['S/K'] <= 1.05,
+        ]
+    else:
+        split_funcs = [
+            lambda x: x['S/K'] > 1.03,
+            lambda x: x['S/K'] < 0.95,
+            lambda x: 0.95 <= x['S/K'] <= 1.03,
+        ]
+    mnn1_train_features = []
+    mnn1_train_labels = []
+
+    mnn1_test_features_generated = []
+    mnn1_test_labels_generated = []
+
+    mnn1_test_features_real = []
+    mnn1_test_labels_real = []
+
+    for split_func in split_funcs:
+        filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
+
+        mnn1_train_features.append(filtered_dataset[features])
+        mnn1_train_labels.append(filtered_dataset['C/K'])
+
+        filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
+
+        mnn1_test_features_generated.append(filtered_dataset[features])
+        mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
+
+        filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
+
+        mnn1_test_features_real.append(filtered_dataset[features])
+        mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
+
+    train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
+                         mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
 
     if option_type == 'calls':
         split_funcs = [
@@ -416,6 +416,6 @@ r^2: {r_squared(y_true, y_pred).numpy()}
 """)
 
 start_time = perf_counter()
-train_and_test_all_models("puts")
-# train_and_test_all_models("calls")
+# train_and_test_all_models("puts")
+train_and_test_all_models("calls")
 print("Total time ", perf_counter() - start_time)
