@@ -15,10 +15,10 @@ march_option_prices = pd.read_csv(DATA_DIR + '/quote_SXO_20200101_20200430.csv',
     'Expiry Date',
     'Call/Put',
     'Volume',
-    'Settlement Price',
+    'Last Price'
 ]]
 
-march_option_prices = march_option_prices.rename(columns={'Strike Price': 'k', 'Settlement Price': 'C'})
+march_option_prices = march_option_prices.rename(columns={'Strike Price': 'k', 'Last Price': 'C'})
 
 # Cleanup the options data removing options that had no volume traded during the day
 march_option_prices = march_option_prices[march_option_prices["Volume"] > 0]
@@ -45,11 +45,6 @@ volatility = volatility.dropna()
 
 data = volatility.Volatility
 
-# Plot the distribution we'll use to model the data
-x = np.linspace(0, 0.4)
-plt.plot(x, ss.lognorm.pdf(x, 0.75, 0, 0.08))
-plt.title("Log normal 0.5, 0, 0.1 distribution")
-plt.show()
 
 fig, axs = plt.subplots(1, 2, figsize=(20, 10))
 data.hist(ax=axs[0], weights=np.zeros_like(data) + 1. / data.size)
@@ -119,14 +114,10 @@ march_option_prices = march_option_prices.drop(["Time Delta", "Expiry Date"], ax
 
 # Plot the time to expiry data
 data = march_option_prices[['t']]
-fig, axs = plt.subplots(2, 1, figsize=(20, 10))
-data.hist(ax=axs[0], weights=np.zeros_like(data) + 1. / data.size)
-axs[0].set_title("Time to Expiry Histogram")
-axs[0].set_xlabel('Time to Expiry')
-
-x = np.linspace(0, 1)
-axs[1].plot(x, ss.lognorm.pdf(x, 1.5, 0.05, 0.15))
-axs[1].set_title("Log normal 1.5, 0.05, 0.15 distribution")
+fig, axs = plt.subplots(1, 1, figsize=(20, 10))
+data.hist(ax=axs, weights=np.zeros_like(data) + 1. / data.size)
+axs.set_title("Time to Expiry Histogram")
+axs.set_xlabel('Time to Expiry')
 
 plt.show()
 
