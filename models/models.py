@@ -416,6 +416,6 @@ r^2: {r_squared(y_true, y_pred).numpy()}
 """)
 
 start_time = perf_counter()
-# train_and_test_all_models("puts")
+train_and_test_all_models("puts")
 train_and_test_all_models("calls")
 print("Total time ", perf_counter() - start_time)
