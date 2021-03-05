@@ -22,7 +22,7 @@ np.set_printoptions(precision=3, suppress=True)
 print(tf.__version__)
 
 PRINT_TENSORFLOW_PROGRESS = 0
-SHOW_PLOTS = True
+SHOW_PLOTS = False
 
 VALIDATION_SPLIT = 0.20
 
@@ -53,7 +53,7 @@ def model_builder_1_layer(hp):
     model.add(keras.layers.Dense(units=hp_units, activation="relu"))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[10, 1e-2, 1e-3, 1e-4])
+    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
@@ -184,8 +184,6 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     y_pred = np.array([])
     y_true = np.array([])
 
-    print(models[0].summary())
-
     for i in range(len(models)):
         predictions = models[i].predict(test_generated_features[i],
                                         verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * \
@@ -304,48 +302,48 @@ def train_and_test_all_models(option_type):
     test_labels_generated = test_dataset_generated[['C', 'k']]
     test_labels_real = test_dataset_real[['C', 'k']]
 
-    train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
-                         [test_labels_generated], [test_features_real], [test_labels_real])
+    # train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
+    #                      [test_labels_generated], [test_features_real], [test_labels_real])
 
-    # if option_type == 'calls':
-    #     split_funcs = [
-    #         lambda x: x['S/K'] > 1.05,
-    #         lambda x: x['S/K'] < 0.97,
-    #         lambda x: 0.97 <= x['S/K'] <= 1.05,
-    #     ]
-    # else:
-    #     split_funcs = [
-    #         lambda x: x['S/K'] > 1.03,
-    #         lambda x: x['S/K'] < 0.95,
-    #         lambda x: 0.95 <= x['S/K'] <= 1.03,
-    #     ]
-    # mnn1_train_features = []
-    # mnn1_train_labels = []
-    #
-    # mnn1_test_features_generated = []
-    # mnn1_test_labels_generated = []
-    #
-    # mnn1_test_features_real = []
-    # mnn1_test_labels_real = []
-    #
-    # for split_func in split_funcs:
-    #     filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
-    #
-    #     mnn1_train_features.append(filtered_dataset[features])
-    #     mnn1_train_labels.append(filtered_dataset['C/K'])
-    #
-    #     filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
-    #
-    #     mnn1_test_features_generated.append(filtered_dataset[features])
-    #     mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
-    #
-    #     filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
-    #
-    #     mnn1_test_features_real.append(filtered_dataset[features])
-    #     mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
-    #
-    # train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
-    #                      mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
+    if option_type == 'calls':
+        split_funcs = [
+            lambda x: x['S/K'] > 1.05,
+            lambda x: x['S/K'] < 0.97,
+            lambda x: 0.97 <= x['S/K'] <= 1.05,
+        ]
+    else:
+        split_funcs = [
+            lambda x: x['S/K'] > 1.03,
+            lambda x: x['S/K'] < 0.95,
+            lambda x: 0.95 <= x['S/K'] <= 1.03,
+        ]
+    mnn1_train_features = []
+    mnn1_train_labels = []
+
+    mnn1_test_features_generated = []
+    mnn1_test_labels_generated = []
+
+    mnn1_test_features_real = []
+    mnn1_test_labels_real = []
+
+    for split_func in split_funcs:
+        filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
+
+        mnn1_train_features.append(filtered_dataset[features])
+        mnn1_train_labels.append(filtered_dataset['C/K'])
+
+        filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
+
+        mnn1_test_features_generated.append(filtered_dataset[features])
+        mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
+
+        filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
+
+        mnn1_test_features_real.append(filtered_dataset[features])
+        mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
+
+    train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
+                         mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
     #
     # if option_type == 'calls':
     #     split_funcs = [

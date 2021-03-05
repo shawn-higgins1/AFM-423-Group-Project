@@ -21,11 +21,11 @@ def generate_options_data(n, call_data):
 
     for i in range(n):
         index_price = np.round(ss.uniform.rvs(800, 400), 2)
-        strike_price = index_price + 20 * ss.randint.rvs(-5, 6)
-        time_to_expiry = np.round(ss.lognorm.rvs(1.5, 0.05, 0.15), 4)
+        strike_price = index_price + 20 * ss.randint.rvs(-7, 8)
+        time_to_expiry = np.round(ss.uniform.rvs(0.05, 1), 4)
         r = np.round(ss.uniform.rvs(0.01, 0.02), 4)
-        volatility = np.round(ss.lognorm.rvs(0.75, 0, 0.08), 5)
-        d = np.round(ss.uniform.rvs(0.020, 0.015), 3)
+        volatility = np.round(ss.uniform.rvs(0.035, 0.20), 5)
+        d = np.round(ss.uniform.rvs(0.020, 0.02), 3)
         expected_price = 0
 
         if call_data:
