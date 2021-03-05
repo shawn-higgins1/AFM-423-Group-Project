@@ -53,7 +53,7 @@ def model_builder_1_layer(hp):
     model.add(keras.layers.Dense(units=hp_units, activation="relu"))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
+    hp_learning_rate = hp.Choice('learning_rate', values=[10, 1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
@@ -75,7 +75,7 @@ def model_builder_2_layer(hp):
     model.add(keras.layers.Dense(units=hp_units_2, activation="relu"))
     model.add(keras.layers.Dense(1))
 
-    hp_learning_rate = hp.Choice('learning_rate', values=[1e-2, 1e-3, 1e-4])
+    hp_learning_rate = hp.Choice('learning_rate', values=[0.1, 1e-2, 1e-3, 1e-4])
 
     model.compile(loss='mse',
                   optimizer=keras.optimizers.Adam(learning_rate=hp_learning_rate),
