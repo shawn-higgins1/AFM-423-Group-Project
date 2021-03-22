@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import scipy.stats as ss
 
+
+# This script processes the real historical options prices we were able to find and augements that data with all of the
+# inputs to the Black-Scholes equation (volatility, risk free rate, etc)
+
 # Parent directory where all the csv files are stored
 DATA_DIR = "../data"
 
@@ -18,10 +22,13 @@ march_option_prices = pd.read_csv(DATA_DIR + '/quote_SXO_20200101_20200430.csv',
     'Last Price'
 ]]
 
+# Rename some columns so that they're consistent with the generated data
 march_option_prices = march_option_prices.rename(columns={'Strike Price': 'k', 'Last Price': 'C'})
 
 # Cleanup the options data removing options that had no volume traded during the day
 march_option_prices = march_option_prices[march_option_prices["Volume"] > 0]
+
+# Convert the data columns to actual dates
 march_option_prices["Date"] = pd.to_datetime(march_option_prices["Date"])
 march_option_prices["Expiry Date"] = pd.to_datetime(march_option_prices["Expiry Date"])
 
@@ -44,7 +51,6 @@ volatility = sp_60_prices[['Effective date', 'Volatility']]
 volatility = volatility.dropna()
 
 data = volatility.Volatility
-
 
 fig, axs = plt.subplots(1, 2, figsize=(20, 10))
 data.hist(ax=axs[0], weights=np.zeros_like(data) + 1. / data.size)
@@ -127,7 +133,7 @@ call_options = call_options.drop(["Call/Put"], axis=1)
 call_options['black_scholes'] = 0.0
 call_options['S/K'] = call_options['S'] / call_options['k']
 
-# Calculate the black scholes price for the calls
+# Calculate the Black-Scholes price for the calls
 for i, call_option in call_options.iterrows():
     call_options.at[i, 'black_scholes'] = black_scholes_calls(
         call_option['S'],
@@ -150,7 +156,7 @@ put_options = put_options.drop(["Call/Put"], axis=1)
 put_options['black_scholes'] = 0.0
 put_options['S/K'] = put_options['S'] / put_options['k']
 
-# Calculate the black scholes price for the puts
+# Calculate the Black-Scholes price for the puts
 for i, put_option in put_options.iterrows():
     put_options.at[i, 'black_scholes'] = black_scholes_puts(
         put_option['S'],

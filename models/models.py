@@ -6,7 +6,7 @@ from time import perf_counter
 import os
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-# To disable the gpu acceleration
+# To disable the gpu acceleration (not recommended)
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import tensorflow as tf
@@ -14,6 +14,7 @@ import tensorflow_addons as tfa
 from tensorflow import keras
 import kerastuner as kt
 
+# Hide the verbose tensorflow debugging messages
 tf.get_logger().setLevel('ERROR')
 
 # Make's for easier debugging / printing when displaying numpy arrays
@@ -21,15 +22,19 @@ np.set_printoptions(precision=3, suppress=True)
 
 print(tf.__version__)
 
+
+# Constants used to control what the program outputs
 PRINT_TENSORFLOW_PROGRESS = 0
 SHOW_PLOTS = False
 
 VALIDATION_SPLIT = 0.20
 
+# Constants for the directories to find the data and save the logs
 DATA_DIR = "../data"
 LOG_DIR = "./logs"
 
 
+# Custom RSquared Metric used to evaluate the R squared value for a model
 class MyRSquared(tfa.metrics.RSquare):
     def __init__(self, name="r_squared", dtype=tf.float64, **kwargs):
         super().__init__(name=name, dtype=dtype, y_shape=(1,))
@@ -46,6 +51,8 @@ def plot_loss(history):
     plt.show()
 
 
+# This function builds a 1 layer Feed Forward Neural network that is used by the Hyperband tuner to find the optimal
+# hyper-parameters. The hp.Choice values represent the hyper-parameters that will get tested
 def model_builder_1_layer(hp):
     model = keras.Sequential()
 
@@ -66,6 +73,7 @@ def model_builder_1_layer(hp):
     return model
 
 
+# Similar to model_builder_1_layer expect this builds a 2-layer Feed Forward Neural Network
 def model_builder_2_layer(hp):
     model = keras.Sequential()
 
@@ -88,6 +96,23 @@ def model_builder_2_layer(hp):
     return model
 
 
+# Helper function that determines the 4 metrics we use to evaluate each model based on y_pred and y_true
+def calc_p1erformance(y_pred, y_true):
+    # Load the metrics from Tensorflow
+    mape = tf.keras.metrics.MeanAbsolutePercentageError()
+    mae = tf.keras.metrics.MeanAbsoluteError()
+    mse = tf.keras.metrics.MeanSquaredError()
+    r_squared = tfa.metrics.RSquare()
+
+    # Output the metrics
+    print(f"""
+    mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {mae(y_true, y_pred).numpy()}, 
+    r^2: {r_squared(y_true, y_pred).numpy()}
+    """)
+
+
+# This is the main drive function. First it performs a Hyperband search to find the optimal model hyper-parameters and
+# then in retrains the optimal model on all of the data and computes the performance metrics for the model
 def train_and_test_model(model_type, option_type, train_features, train_labels, test_generated_features,
                          test_generated_labels,
                          test_real_features, test_real_labels):
@@ -96,12 +121,15 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     model_checkpoint_dir = f"./{option_type}"
     model_log_dir = LOG_DIR + f"./{option_type}"
 
+    # In the case of the MNN the train and test data is broken up by the criteria for each module in the MNN
     for i in range(len(train_labels)):
         print(f"Generating {option_type} {model_type} model {i}. Total train: {len(train_labels[i])} total test: " +
               f"{len(test_generated_labels[i])}")
 
         stop_early = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5)
 
+        # Find the optimal 1 layer model. If there is pre-existing checkpoints in the folder specified by directory
+        # then the results of that search are returned
         tuner_1_layer = kt.Hyperband(model_builder_1_layer,
                                      objective='val_loss',
                                      max_epochs=25,
@@ -123,6 +151,7 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
             {best_hps_1_layer.get('learning_rate')}.
             """)
 
+        # Find the optimal 2 layer model
         tuner_2_layer = kt.Hyperband(model_builder_2_layer,
                                      objective='val_loss',
                                      max_epochs=25,
@@ -146,7 +175,9 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
         save_path = f'saved_model/{option_type}_{model_type}_{i}'
 
+        # If there is a saved copy of the best model than load the saved model otherwise, train a new model.
         if not os.path.exists(save_path) or len(os.listdir(save_path)) == 0:
+            # Build and train the optimal 1 layer and 2 layer models
             layer1_model = tuner_1_layer.hypermodel.build(best_hps_1_layer)
             layer2_model = tuner_2_layer.hypermodel.build(best_hps_2_layer)
 
@@ -166,9 +197,12 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
                 plot_loss(history_1_layer)
                 plot_loss(history_2_layer)
 
+            # Determine the average validation loss for both models over the final 20 epochs. This average prevents
+            # a spike in the validation loss on the last epoch from skewing which model we end up selecting.
             layer_1_loss = np.average(history_1_layer.history['val_loss'][-20:])
             layer_2_loss = np.average(history_2_layer.history['val_loss'][-20:])
 
+            # Choose the best model
             if layer_2_loss > layer_1_loss:
                 hypermodel = layer1_model
                 print("The 1 layer model had the lowest loss")
@@ -176,32 +210,45 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
                 hypermodel = layer2_model
                 print("The 2 layer model had the lowest loss")
 
+            # Save the best model
             hypermodel.save(save_path)
+
+            # For an MNN append the model to the list of the over sub models.
             models.append(hypermodel)
         else:
             models.append(tf.keras.models.load_model(save_path, custom_objects={'MyRSquared': MyRSquared}))
 
+    # Evaluate the model(s) based on the generated data
     y_pred = np.array([])
     y_true = np.array([])
 
     for i in range(len(models)):
+        # Generate the prediction for the test data. Since the NN outputs C / K instead of just C. We multiply the
+        # predictions by K to faciliate a better comparison with Black-Scholes
         predictions = models[i].predict(test_generated_features[i],
                                         verbose=PRINT_TENSORFLOW_PROGRESS).flatten() * \
                       test_generated_labels[i]['k'].to_numpy()
 
+        # Since we know that an option with never have a negative price run a max function over the prediction prices
         maxer = lambda x: max(x, 0)
         vector_maxer = np.vectorize(maxer)
 
         predictions = vector_maxer(predictions)
 
+        # Calculate the performance for the individual model
         print(f"Individual performance for the model {i} on the generated data:")
         calc_performance(predictions, test_generated_labels[i]['C'].to_numpy())
 
+        # In the base of a MNN concatenate the predictions together so we can evaluate the predictions across all the
+        # modules
         y_pred = np.concatenate((y_pred, predictions))
         y_true = np.concatenate((y_true, test_generated_labels[i]['C'].to_numpy()))
 
     percentage_errors = []
 
+    # Calculate the Median absolute percentage error. This is valuable because for some options with very low prices the
+    # MAPE can get skewed because even small (1 or 2 cent) differences in prices can result in a huge bsolute Percentage
+    # error
     for i in range(len(y_pred)):
         if y_true[i] != 0:
             percentage_errors.append(np.abs(y_pred[i] - y_true[i]) / y_true[i])
@@ -232,8 +279,10 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         _ = plt.ylabel('Count')
         plt.show()
 
+    # Calculate the performance across the combined predictions from each model
     calc_performance(y_pred, y_true)
 
+    # Perform the same testing procedure on the real data
     y_pred = np.array([])
     y_true = np.array([])
 
@@ -270,18 +319,8 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         calc_performance(y_pred, y_true)
 
 
-def calc_performance(y_pred, y_true):
-    mape = tf.keras.metrics.MeanAbsolutePercentageError()
-    mae = tf.keras.metrics.MeanAbsoluteError()
-    mse = tf.keras.metrics.MeanSquaredError()
-    r_squared = tfa.metrics.RSquare()
-
-    print(f"""
-    mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {mae(y_true, y_pred).numpy()}, 
-    r^2: {r_squared(y_true, y_pred).numpy()}
-    """)
-
-
+# This function runs the three distinct model we wish to test ANN, MNN with 3 modules and MNN with 9 models for the
+# specified options_type
 def train_and_test_all_models(option_type):
     # Load in the data
     raw_train = pd.read_csv(DATA_DIR + f"/train_{option_type}.csv", sep=',')
@@ -294,6 +333,7 @@ def train_and_test_all_models(option_type):
     test_dataset_generated = raw_test_generated.copy()
     test_dataset_real = raw_test_real.copy()
 
+    # Split the data into features and the response
     train_features = train_dataset[features]
     test_features_generated = test_dataset_generated[features]
     test_features_real = test_dataset_real[features]
@@ -302,9 +342,11 @@ def train_and_test_all_models(option_type):
     test_labels_generated = test_dataset_generated[['C', 'k']]
     test_labels_real = test_dataset_real[['C', 'k']]
 
+    # Find the best ANN model and the test its performance against the test data
     train_and_test_model("ANN", option_type, [train_features], [train_labels], [test_features_generated],
                          [test_labels_generated], [test_features_real], [test_labels_real])
 
+    # Split the data into three distinct groups for the MNN is 3 modules
     if option_type == 'calls':
         split_funcs = [
             lambda x: x['S/K'] > 1.05,
@@ -327,24 +369,29 @@ def train_and_test_all_models(option_type):
     mnn1_test_labels_real = []
 
     for split_func in split_funcs:
+        # Split the training data
         filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
 
         mnn1_train_features.append(filtered_dataset[features])
         mnn1_train_labels.append(filtered_dataset['C/K'])
 
+        # Split the test data
         filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
 
         mnn1_test_features_generated.append(filtered_dataset[features])
         mnn1_test_labels_generated.append(filtered_dataset[['C', 'k']])
 
+        # Split the real data
         filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
 
         mnn1_test_features_real.append(filtered_dataset[features])
         mnn1_test_labels_real.append(filtered_dataset[['C', 'k']])
 
+    # Find the best MNN with 3 sub models and evaluate it
     train_and_test_model("MNN1", option_type, mnn1_train_features, mnn1_train_labels, mnn1_test_features_generated,
                          mnn1_test_labels_generated, mnn1_test_features_real, mnn1_test_labels_real)
 
+    # Split the data into nine distinct groups for the MNN is 9 sub-models
     if option_type == 'calls':
         split_funcs = [
             lambda x: x['S/K'] > 1.05 and x['t'] < 0.06,
@@ -379,29 +426,34 @@ def train_and_test_all_models(option_type):
     mnn2_test_labels_real = []
 
     for split_func in split_funcs:
+        # Split the training dataset
         filtered_dataset = train_dataset[train_dataset.apply(split_func, axis=1)]
 
         mnn2_train_features.append(filtered_dataset[features])
         mnn2_train_labels.append(filtered_dataset['C/K'])
 
+        # Split the test data
         filtered_dataset = test_dataset_generated[test_dataset_generated.apply(split_func, axis=1)]
 
         mnn2_test_features_generated.append(filtered_dataset[features])
         mnn2_test_labels_generated.append(filtered_dataset[['C', 'k']])
 
+        # Split the real data
         filtered_dataset = test_dataset_real[test_dataset_real.apply(split_func, axis=1)]
 
         mnn2_test_features_real.append(filtered_dataset[features])
         mnn2_test_labels_real.append(filtered_dataset[['C', 'k']])
 
+    # Find the best MNN with 9 sub models and evaluate it
     train_and_test_model("MNN2", option_type, mnn2_train_features, mnn2_train_labels, mnn2_test_features_generated,
                          mnn2_test_labels_generated, mnn2_test_features_real, mnn2_test_labels_real)
 
 
+# Read in the real puts data
 print("Black Scholes Performance on the real test data for puts:")
-
 real_data = pd.read_csv(DATA_DIR + "/puts.csv", sep=',')
 
+# Evaluate the performance of Black-Scholes on the real data
 y_true = real_data['C']
 y_pred = real_data['black_scholes']
 
@@ -415,6 +467,7 @@ mape: {mape(y_true, y_pred).numpy()}, mse: {mse(y_true, y_pred).numpy()}, mae: {
 r^2: {r_squared(y_true, y_pred).numpy()}
 """)
 
+# Train and evaluate every model type for both calls and puts
 start_time = perf_counter()
 train_and_test_all_models("puts")
 train_and_test_all_models("calls")
