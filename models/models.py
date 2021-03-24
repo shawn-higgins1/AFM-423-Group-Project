@@ -22,10 +22,9 @@ np.set_printoptions(precision=3, suppress=True)
 
 print(tf.__version__)
 
-
 # Constants used to control what the program outputs
 PRINT_TENSORFLOW_PROGRESS = 0
-SHOW_PLOTS = False
+SHOW_PLOTS = True
 
 VALIDATION_SPLIT = 0.20
 
@@ -46,6 +45,7 @@ def plot_loss(history):
     plt.plot(history.history['val_loss'], label='val_loss')
     plt.xlabel('Epoch')
     plt.ylabel('Error')
+    plt.title("Train and Validation Loss Per Epoch")
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -97,7 +97,7 @@ def model_builder_2_layer(hp):
 
 
 # Helper function that determines the 4 metrics we use to evaluate each model based on y_pred and y_true
-def calc_p1erformance(y_pred, y_true):
+def calc_performance(y_pred, y_true):
     # Load the metrics from Tensorflow
     mape = tf.keras.metrics.MeanAbsolutePercentageError()
     mae = tf.keras.metrics.MeanAbsoluteError()
@@ -120,6 +120,7 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
 
     model_checkpoint_dir = f"./{option_type}"
     model_log_dir = LOG_DIR + f"./{option_type}"
+    total_time = 0.0
 
     # In the case of the MNN the train and test data is broken up by the criteria for each module in the MNN
     for i in range(len(train_labels)):
@@ -184,18 +185,24 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
             start_time = perf_counter()
             history_1_layer = layer1_model.fit(train_features[i], train_labels[i], epochs=200,
                                                validation_split=VALIDATION_SPLIT,
-                                               verbose=PRINT_TENSORFLOW_PROGRESS)
-            print("Elapsed time:", perf_counter() - start_time)
+                                               verbose=PRINT_TENSORFLOW_PROGRESS,
+                                               callbacks=[
+                                                   tf.keras.callbacks.TensorBoard(
+                                                       model_log_dir + f"/{model_type}_{i}/final/1_layer"
+                                                   )]
+                                               )
+            model_1_time = perf_counter() - start_time
 
             start_time = perf_counter()
             history_2_layer = layer2_model.fit(train_features[i], train_labels[i], epochs=200,
                                                validation_split=VALIDATION_SPLIT,
-                                               verbose=PRINT_TENSORFLOW_PROGRESS)
-            print("Elapsed time:", perf_counter() - start_time)
-
-            if SHOW_PLOTS:
-                plot_loss(history_1_layer)
-                plot_loss(history_2_layer)
+                                               verbose=PRINT_TENSORFLOW_PROGRESS,
+                                               callbacks=[
+                                                   tf.keras.callbacks.TensorBoard(
+                                                       model_log_dir + f"/{model_type}_{i}/final/2_layer"
+                                                   )]
+                                               )
+            model_2_time = perf_counter() - start_time
 
             # Determine the average validation loss for both models over the final 20 epochs. This average prevents
             # a spike in the validation loss on the last epoch from skewing which model we end up selecting.
@@ -206,9 +213,17 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
             if layer_2_loss > layer_1_loss:
                 hypermodel = layer1_model
                 print("The 1 layer model had the lowest loss")
+                total_time += model_1_time
+
+                if SHOW_PLOTS:
+                    plot_loss(history_1_layer)
             else:
                 hypermodel = layer2_model
                 print("The 2 layer model had the lowest loss")
+                total_time += model_2_time
+
+                if SHOW_PLOTS:
+                    plot_loss(history_2_layer)
 
             # Save the best model
             hypermodel.save(save_path)
@@ -216,7 +231,11 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
             # For an MNN append the model to the list of the over sub models.
             models.append(hypermodel)
         else:
-            models.append(tf.keras.models.load_model(save_path, custom_objects={'MyRSquared': MyRSquared}))
+            model = tf.keras.models.load_model(save_path, custom_objects={'MyRSquared': MyRSquared})
+            models.append(model)
+            print(model.summary())
+
+    print("Took", total_time, "seconds to train the complete model")
 
     # Evaluate the model(s) based on the generated data
     y_pred = np.array([])
@@ -258,24 +277,15 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
     print("Median Absolute Percentage Error: " + str(statistics.median(percentage_errors)))
 
     if SHOW_PLOTS:
-        plt.hist(percentage_errors, bins=25)
-        plt.xlabel('Percentage Errors [C/K]')
-        _ = plt.ylabel('Count')
-        plt.show()
-
-        a = plt.axes(aspect='equal')
-        plt.scatter(y_true, y_pred)
-        plt.xlabel('True Values [C/K]')
-        plt.ylabel('Predictions [C/K]')
-        lims = [0, 350]
-        plt.xlim(lims)
-        plt.ylim(lims)
-        _ = plt.plot(lims, lims)
-        plt.show()
+        # plt.hist(percentage_errors, bins=25)
+        # plt.xlabel('Percentage Errors [C/K]')
+        # _ = plt.ylabel('Count')
+        # plt.show()
 
         error = y_pred - y_true
         plt.hist(error, bins=25)
-        plt.xlabel('Prediction Error [C/K]')
+        plt.title("Histogram of the Predictions Errors")
+        plt.xlabel('Prediction Error [C]')
         _ = plt.ylabel('Count')
         plt.show()
 
@@ -317,6 +327,18 @@ def train_and_test_model(model_type, option_type, train_features, train_labels, 
         print("Median Absolute Percentage Error: " + str(statistics.median(percentage_errors)))
 
         calc_performance(y_pred, y_true)
+
+        if SHOW_PLOTS:
+            a = plt.axes(aspect='equal')
+            plt.scatter(y_true, y_pred)
+            plt.xlabel('True Values [C]')
+            plt.ylabel('Predictions [C]')
+            plt.title("Real Option Prices vs. Predicted Option Prices")
+            lims = [0, 350]
+            plt.xlim(lims)
+            plt.ylim(lims)
+            _ = plt.plot(lims, lims)
+            plt.show()
 
 
 # This function runs the three distinct model we wish to test ANN, MNN with 3 modules and MNN with 9 models for the
@@ -468,7 +490,5 @@ r^2: {r_squared(y_true, y_pred).numpy()}
 """)
 
 # Train and evaluate every model type for both calls and puts
-start_time = perf_counter()
 train_and_test_all_models("puts")
 train_and_test_all_models("calls")
-print("Total time ", perf_counter() - start_time)
