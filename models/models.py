@@ -24,7 +24,7 @@ print(tf.__version__)
 
 # Constants used to control what the program outputs
 PRINT_TENSORFLOW_PROGRESS = 0
-SHOW_PLOTS = True
+SHOW_PLOTS = False
 
 VALIDATION_SPLIT = 0.20
 
