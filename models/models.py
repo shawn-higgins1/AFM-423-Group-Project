@@ -479,6 +479,18 @@ real_data = pd.read_csv(DATA_DIR + "/puts.csv", sep=',')
 y_true = real_data['C']
 y_pred = real_data['black_scholes']
 
+if SHOW_PLOTS:
+    a = plt.axes(aspect='equal')
+    plt.scatter(y_true, y_pred)
+    plt.xlabel('True Values [C]')
+    plt.ylabel('Predictions [C]')
+    plt.title("Real Option Prices vs. Predicted Option Prices")
+    lims = [0, 350]
+    plt.xlim(lims)
+    plt.ylim(lims)
+    _ = plt.plot(lims, lims)
+    plt.show()
+
 mape = tf.keras.losses.MeanAbsolutePercentageError()
 mae = tf.keras.losses.MeanAbsoluteError()
 mse = tf.keras.losses.MeanSquaredError()
